@@ -1,0 +1,28 @@
+{
+  "name": "Starshine Invoice Pro",
+  "short_name": "Starshine",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f8fc",
+  "theme_color": "#19b7e6",
+  "description": "Starshine Invoice Pro \u2014 fast invoices + saved clients.",
+  "icons": [
+    {
+      "src": "./assets/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./assets/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "./assets/pwa-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

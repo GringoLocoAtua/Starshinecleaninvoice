@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#19b7e6" />
+<meta name="description" content="Starshine Invoice Pro — fast invoices + saved clients." />
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="icon" href="./assets/pwa-192.png" />
+<link rel="apple-touch-icon" href="./assets/pwa-180.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Starshine Invoice Pro" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>Starshine Invoice Pro</title>
+
+<style>
+  /* =========================
+     STARSHINE // APPLE NEXT-LEVEL (UI ONLY)
+     - iOS / macOS “software update” glass
+     - Logo colours (cyan/teal + gold)
+     - Smooth transitions + active segmented nav
+     - Adds: CLIENTS TAB + saved-client picker
+     ========================= */
+
+  :root{
+    /* Logo-inspired palette */
+    --cyan:#19b7e6;
+    --cyan2:#0ea5e9;
+    --teal:#14b8a6;
+    --navy:#0b2a3a;
+    --ink:#0b1220;
+    --muted:#5b667a;
+    --gold:#d8c87a;
+
+    /* Apple glass surfaces */
+    --bg1:#f6f8fc;
+    --bg2:#eef3fb;
+    --glass: rgba(255,255,255,.78);
+    --glass2: rgba(255,255,255,.62);
+    --border: rgba(11,18,32,.10);
+
+    --shadow: 0 18px 55px rgba(11,18,32,.12);
+    --shadow2: 0 10px 28px rgba(11,18,32,.10);
+
+    /* Controls */
+    --control: rgba(255,255,255,.86);
+    --controlBorder: rgba(11,18,32,.14);
+    --controlFocus: rgba(25,183,230,.28);
+
+    --danger: #ef4444;
+
+    /* Radii */
+    --r-xl: 26px;
+    --r-lg: 18px;
+    --r-md: 14px;
+  }
+
+  *{ box-sizing:border-box; }
+  html, body { height: 100%; }
+
+  body{
+    margin:0;
+    font-family: ui-sans-serif, system-ui, -apple-system, "SF Pro Display", "SF Pro Text",
+                 "Segoe UI Variable", "Segoe UI", Arial, Helvetica, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(900px 520px at 18% 8%, rgba(25,183,230,.22) 0%, rgba(25,183,230,0) 60%),
+      radial-gradient(820px 520px at 78% 10%, rgba(216,200,122,.22) 0%, rgba(216,200,122,0) 62%),
+      radial-gradient(900px 640px at 60% 92%, rgba(14,165,233,.18) 0%, rgba(14,165,233,0) 64%),
+      linear-gradient(180deg, var(--bg1) 0%, var(--bg2) 100%);
+    overflow-x: hidden;
+  }
+
+  /* Subtle “update screen” sheen */
+  body::before{
+    content:"";
+    position: fixed;
+    inset: -40% -20%;
+    background:
+      radial-gradient(closest-side at 30% 40%, rgba(255,255,255,.42) 0%, rgba(255,255,255,0) 58%),
+      radial-gradient(closest-side at 78% 28%, rgba(255,255,255,.34) 0%, rgba(255,255,255,0) 52%),
+      radial-gradient(closest-side at 62% 78%, rgba(255,255,255,.30) 0%, rgba(255,255,255,0) 52%);
+    filter: blur(12px);
+    pointer-events: none;
+    opacity: .55;
+  }
+
+  /* Top bar */
+  nav{
+    position: sticky;
+    top:0;
+    z-index: 10;
+    padding: 14px 16px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+
+    background: rgba(255,255,255,.70);
+    backdrop-filter: blur(20px) saturate(170%);
+    -webkit-backdrop-filter: blur(20px) saturate(170%);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 10px 34px rgba(11,18,32,.07);
+  }
+
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    font-weight: 950;
+    letter-spacing: .2px;
+    font-size: 18px;
+    white-space: nowrap;
+  }
+  .brand-logo{
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    object-fit: cover;
+    background: rgba(255,255,255,.90);
+    border: 1px solid rgba(11,18,32,.10);
+    box-shadow: 0 12px 22px rgba(11,18,32,.10);
+  }
+  .brand-dot{
+    width: 9px; height: 9px; border-radius: 999px;
+    background: var(--gold);
+    box-shadow: 0 0 18px rgba(216,200,122,.55);
+  }
+
+  /* Segmented nav group */
+  .seg{
+    display:flex;
+    gap:8px;
+    padding: 6px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.60);
+    border: 1px solid rgba(11,18,32,.10);
+    box-shadow: 0 10px 26px rgba(11,18,32,.06);
+  }
+
+  .navbtn{
+    border: 1px solid transparent;
+    background: transparent;
+    color: rgba(11,18,32,.85);
+    padding: 9px 14px;
+    border-radius: 999px;
+    cursor:pointer;
+    font-weight: 900;
+    transition: transform .12s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease;
+  }
+  .navbtn:hover{
+    background: rgba(255,255,255,.70);
+    transform: translateY(-1px);
+  }
+  .navbtn:active{ transform: translateY(0px) scale(.99); }
+  .navbtn.active{
+    background:
+      radial-gradient(120px 80px at 20% 20%, rgba(255,255,255,.55) 0%, rgba(255,255,255,0) 60%),
+      linear-gradient(135deg, rgba(25,183,230,.95) 0%, rgba(14,165,233,.92) 55%, rgba(216,200,122,.72) 100%);
+    color: #07111f;
+    border-color: rgba(11,18,32,.10);
+    box-shadow: 0 14px 30px rgba(11,18,32,.10);
+  }
+
+  /* Layout */
+  .container{
+    padding: 18px 18px 40px 18px;
+    display:flex;
+    justify-content:center;
+  }
+  .shell{
+    width: min(1100px, 100%);
+    display:grid;
+    grid-template-columns: 1fr;
+    gap:14px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Glass panels */
+  .panel{
+    background: linear-gradient(180deg, var(--glass) 0%, var(--glass2) 100%);
+    border: 1px solid var(--border);
+    border-radius: var(--r-xl);
+    padding: 18px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    position: relative;
+    overflow: hidden;
+  }
+  .panel::before{
+    content:"";
+    position:absolute;
+    inset:-1px;
+    background:
+      radial-gradient(400px 120px at 16% 0%, rgba(25,183,230,.18) 0%, rgba(25,183,230,0) 55%),
+      radial-gradient(400px 120px at 84% 0%, rgba(216,200,122,.16) 0%, rgba(216,200,122,0) 55%);
+    pointer-events:none;
+  }
+  .panel > * { position: relative; z-index: 1; }
+
+  .fade{
+    animation: fadeUp .22s ease-out both;
+  }
+  @keyframes fadeUp{
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0px); }
+  }
+
+  h1,h2,h3{ margin:0; }
+  .muted{ color: var(--muted); }
+
+  /* Inputs */
+  label{
+    display:block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-weight: 750;
+  }
+  input, select{
+    width: 100%;
+    background: var(--control);
+    border: 1px solid var(--controlBorder);
+    color: var(--ink);
+    padding: 11px 12px;
+    border-radius: var(--r-md);
+    outline:none;
+    box-shadow: 0 10px 24px rgba(11,18,32,.06);
+    transition: box-shadow .12s ease, border-color .12s ease;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  select{
+    background-image:
+      linear-gradient(45deg, transparent 50%, rgba(11,18,32,.55) 50%),
+      linear-gradient(135deg, rgba(11,18,32,.55) 50%, transparent 50%);
+    background-position:
+      calc(100% - 18px) calc(50% - 2px),
+      calc(100% - 12px) calc(50% - 2px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+    padding-right: 34px;
+  }
+  input:focus, select:focus{
+    border-color: rgba(25,183,230,.55);
+    box-shadow:
+      0 16px 34px rgba(11,18,32,.10),
+      0 0 0 6px var(--controlFocus);
+  }
+  input[readonly]{ opacity:.92; }
+
+  /* Buttons */
+  .btn{
+    border: 1px solid rgba(11,18,32,.12);
+    background: rgba(255,255,255,.86);
+    color: var(--ink);
+    padding: 10px 14px;
+    border-radius: var(--r-md);
+    cursor:pointer;
+    font-weight: 950;
+    box-shadow: var(--shadow2);
+    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+  }
+  .btn:hover{
+    transform: translateY(-1px);
+    box-shadow: 0 18px 38px rgba(11,18,32,.12);
+  }
+  .btn:active{ transform: translateY(0px) scale(.99); }
+
+  .btn.primary{
+    color:#07111f;
+    border: 1px solid rgba(11,18,32,.10);
+    background:
+      radial-gradient(120px 80px at 20% 20%, rgba(255,255,255,.55) 0%, rgba(255,255,255,0) 60%),
+      linear-gradient(135deg, rgba(25,183,230,.95) 0%, rgba(14,165,233,.92) 55%, rgba(216,200,122,.75) 100%);
+  }
+  .btn.primary:hover{ filter: brightness(1.02) saturate(1.06); }
+
+  .btn.danger{
+    background: rgba(239,68,68,.10);
+    border-color: rgba(239,68,68,.28);
+  }
+
+  .btn.ghost{
+    background: rgba(255,255,255,.70);
+  }
+
+  /* Grid */
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap:12px;
+  }
+  .field{ grid-column: span 6; }
+  .field.sm{ grid-column: span 4; }
+  .field.full{ grid-column: span 12; }
+
+  /* Sections */
+  .header-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:14px;
+    flex-wrap:wrap;
+    margin-bottom: 12px;
+  }
+  .header-row h2{
+    font-size: 24px;
+    font-weight: 980;
+    letter-spacing: .1px;
+  }
+
+  .toolbar{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+
+  /* History list */
+  .history{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    margin-top: 8px;
+  }
+  .card{
+    background: rgba(255,255,255,.72);
+    border: 1px solid rgba(11,18,32,.10);
+    border-radius: var(--r-lg);
+    padding: 14px;
+    box-shadow: 0 10px 26px rgba(11,18,32,.08);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .card-left{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    min-width: 280px;
+  }
+  .title{
+    font-weight: 980;
+    font-size: 15px;
+  }
+  .meta{
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .card-right{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+    margin-left:auto;
+  }
+  .pill{
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.88);
+    border: 1px solid rgba(11,18,32,.10);
+    font-weight: 980;
+    box-shadow: 0 10px 22px rgba(11,18,32,.08);
+  }
+
+  /* Toggle */
+  .toggle{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-top: 8px;
+  }
+  .toggle input{ width:18px; height:18px; }
+
+  /* Table */
+  table{
+    width:100%;
+    border-collapse: collapse;
+    overflow:hidden;
+    border-radius: var(--r-lg);
+    border: 1px solid rgba(11,18,32,.10);
+    background: rgba(255,255,255,.70);
+    margin-top: 10px;
+    box-shadow: 0 12px 30px rgba(11,18,32,.08);
+  }
+  th, td{
+    padding: 11px 10px;
+    border-bottom: 1px solid rgba(11,18,32,.08);
+    font-size: 13px;
+  }
+  th{
+    text-align:left;
+    color: var(--navy);
+    background:
+      radial-gradient(220px 80px at 15% 50%, rgba(25,183,230,.14) 0%, rgba(25,183,230,0) 65%),
+      radial-gradient(220px 80px at 85% 50%, rgba(216,200,122,.14) 0%, rgba(216,200,122,0) 65%),
+      rgba(255,255,255,.92);
+    border-bottom: 1px solid rgba(11,18,32,.10);
+    text-transform: uppercase;
+    letter-spacing: .35px;
+    font-size: 12px;
+    font-weight: 980;
+  }
+  td input{
+    padding: 9px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(11,18,32,.12);
+    background: rgba(255,255,255,.86);
+    box-shadow: 0 10px 22px rgba(11,18,32,.06);
+  }
+  .amount{
+    text-align:right;
+    font-weight: 980;
+    color: var(--navy);
+  }
+
+  .actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top: 12px;
+  }
+
+  .summary{
+    margin-top: 10px;
+    font-weight: 980;
+    color: var(--navy);
+  }
+  .summary .muted{ font-weight: 850; }
+
+  .hidden{ display:none; }
+
+  /* Preview wrapper stays white for PDF fidelity */
+  #previewSection{
+    width: min(980px, 100%);
+    margin: 0 auto;
+  }
+  .invoice-wrap{
+    background:#fff;
+    color:#111;
+    border-radius: 16px;
+    padding: 34px;
+    border: 1px solid #e8e8e8;
+    box-shadow: 0 18px 50px rgba(11,18,32,.12);
+  }
+  .preview-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    margin-top: 12px;
+  }
+
+  /* Toast */
+  .toast{
+    position: fixed;
+    top: 74px;
+    right: 18px;
+    z-index: 999;
+    min-width: 240px;
+    max-width: 360px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: rgba(255,255,255,.85);
+    border: 1px solid rgba(11,18,32,.10);
+    box-shadow: 0 20px 60px rgba(11,18,32,.14);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    opacity: 0;
+    transform: translateY(-8px);
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+    font-weight: 900;
+    color: var(--ink);
+  }
+  .toast.show{
+    opacity: 1;
+    transform: translateY(0px);
+  }
+  .toast small{
+    display:block;
+    margin-top: 4px;
+    font-weight: 750;
+    color: var(--muted);
+  }
+
+  @media print{
+    body *{ visibility:hidden; }
+    #previewSection, #previewSection *{ visibility:visible; }
+    #previewSection{
+      position:absolute; left:0; top:0;
+      width:100%;
+      margin:0;
+      padding:0;
+    }
+    .preview-actions{ display:none !important; }
+    nav, .container{ display:none !important; }
+    .invoice-wrap{ border-radius:0; border:0; padding: 26px; box-shadow:none; }
+  }
+
+  @media (max-width: 900px){
+    .field{ grid-column: span 12; }
+    .field.sm{ grid-column: span 12; }
+  }
+</style>
+</head>
+
+<body>
+<nav>
+  <div class="brand">
+    <img class="brand-logo" src="assets/logo.png" alt="Starshine" onerror="this.style.display='none'">
+    <span class="brand-dot"></span>
+    Starshine Invoice Pro
+  </div>
+
+  <div class="seg">
+    <button id="navDash" class="navbtn" onclick="showDashboard()">Dashboard</button>
+    <button id="navNew" class="navbtn" onclick="showNewInvoice()">New Invoice</button>
+    <button id="navClients" class="navbtn" onclick="showClients()">Clients</button>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="shell">
+
+    <!-- DASHBOARD -->
+    <div id="dashboard" class="panel fade">
+      <div class="header-row">
+        <div>
+          <h2>Invoice History</h2>
+          <div class="muted" style="margin-top:6px;">Saved locally on this PC.</div>
+        </div>
+        <div class="toolbar">
+          <input id="searchBox" placeholder="Search by name, phone, address, invoice #..." oninput="loadHistory()">
+          <button class="btn danger" onclick="clearAllInvoices()">Clear All</button>
+        </div>
+      </div>
+      <div id="historyList" class="history"></div>
+    </div>
+
+    <!-- NEW INVOICE -->
+    <div id="newInvoice" class="panel hidden fade">
+      <div class="header-row">
+        <div>
+          <h2>Create Invoice</h2>
+          <div class="muted" style="margin-top:6px;">2 clicks: select client → add line item → save/preview.</div>
+        </div>
+        <div class="toolbar">
+          <select id="savedClientSelect" onchange="applySelectedClient()">
+            <option value="">— Select saved client —</option>
+          </select>
+          <button class="btn ghost" onclick="showClients()">Manage Clients</button>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:14px;">
+        <div class="field sm">
+          <label>Invoice Number</label>
+          <input id="invoiceNo" readonly>
+        </div>
+        <div class="field sm">
+          <label>Invoice Date</label>
+          <input id="invoiceDate">
+        </div>
+        <div class="field sm">
+          <label>Due Date</label>
+          <input id="dueDate">
+        </div>
+
+        <div class="field">
+          <label>Client Name</label>
+          <input id="clientName" placeholder="e.g. Perry">
+        </div>
+        <div class="field">
+          <label>Client Address</label>
+          <input id="clientAddress" placeholder="e.g. 1312/1 Bindon Pl, Zetland NSW 2017">
+        </div>
+
+        <div class="field sm">
+          <label>Client Phone</label>
+          <input id="clientPhone" placeholder="e.g. 0401 027 367">
+        </div>
+        <div class="field sm">
+          <label>Client Email (optional)</label>
+          <input id="clientEmail" placeholder="e.g. client@email.com">
+        </div>
+        <div class="field sm">
+          <label>Client ABN (optional)</label>
+          <input id="clientAbn" placeholder="e.g. 12 345 678 901">
+        </div>
+
+        <div class="field full">
+          <div class="actions" style="margin-top:0;">
+            <button class="btn" onclick="saveClientFromInvoice()">Save Client</button>
+            <button class="btn ghost" onclick="clearClientFields()">Clear Client</button>
+          </div>
+        </div>
+
+        <div class="field full">
+          <label>GST (10%)</label>
+          <div class="toggle">
+            <input type="checkbox" id="gstToggle" onchange="calculate()">
+            <div class="muted" style="font-weight:850;">Add GST</div>
+          </div>
+        </div>
+
+        <div class="field full">
+          <h3 style="margin:6px 0 6px 0;font-size:18px;font-weight:980;color:var(--navy);">Line Items</h3>
+          <table id="itemsTable">
+            <thead>
+              <tr>
+                <th style="width:48%;">Description</th>
+                <th style="width:16%;">Price</th>
+                <th style="width:12%;">Qty</th>
+                <th style="width:16%; text-align:right;">Amount</th>
+                <th style="width:8%;"></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+
+          <div class="actions">
+            <button class="btn" onclick="addRow()">Add Line Item</button>
+            <button class="btn" onclick="calculate()">Calculate</button>
+            <button class="btn primary" onclick="saveInvoice()">Save Invoice</button>
+            <button class="btn primary" onclick="previewInvoice()">Preview Invoice</button>
+          </div>
+
+          <div class="summary" id="summary"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CLIENTS -->
+    <div id="clients" class="panel hidden fade">
+      <div class="header-row">
+        <div>
+          <h2>Clients</h2>
+          <div class="muted" style="margin-top:6px;">Save profiles once → invoices become fast as hell.</div>
+        </div>
+        <div class="toolbar">
+          <input id="clientsSearchBox" placeholder="Search clients by name, phone, address..." oninput="loadClientsUI()">
+          <button class="btn" onclick="clearClientForm()">New Client</button>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:14px;">
+        <div class="field full" style="grid-column: span 5;">
+          <h3 style="font-size:16px;font-weight:980;color:var(--navy); margin-bottom:10px;">Add / Edit Client</h3>
+
+          <input id="c_id" type="hidden">
+
+          <div class="grid" style="gap:10px;">
+            <div class="field full">
+              <label>Client Name</label>
+              <input id="c_name" placeholder="e.g. Perry">
+            </div>
+            <div class="field full">
+              <label>Address</label>
+              <input id="c_address" placeholder="e.g. 1312/1 Bindon Pl, Zetland NSW 2017">
+            </div>
+            <div class="field sm" style="grid-column: span 12;">
+              <label>Phone</label>
+              <input id="c_phone" placeholder="e.g. 0401 027 367">
+            </div>
+            <div class="field sm" style="grid-column: span 12;">
+              <label>Email (optional)</label>
+              <input id="c_email" placeholder="e.g. client@email.com">
+            </div>
+            <div class="field sm" style="grid-column: span 12;">
+              <label>ABN (optional)</label>
+              <input id="c_abn" placeholder="e.g. 12 345 678 901">
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn primary" onclick="saveClient()">Save Client</button>
+            <button class="btn ghost" onclick="useClientFormForInvoice()">Use For Invoice</button>
+            <button class="btn danger" onclick="deleteClientFromForm()">Delete</button>
+          </div>
+
+          <div class="muted" style="margin-top:10px;font-weight:800;">
+            Tip: click “Use For Invoice” and you’re basically done.
+          </div>
+        </div>
+
+        <div class="field full" style="grid-column: span 7;">
+          <h3 style="font-size:16px;font-weight:980;color:var(--navy); margin-bottom:10px;">Saved Clients</h3>
+          <div id="clientsList" class="history"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PREVIEW -->
+    <div id="previewSection" class="hidden"></div>
+
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+
+<script>
+  // PWA: Service Worker registration (works on https:// or http://localhost, NOT file://)
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+    });
+  }
+</script>
+
+<script src="renderer.js"></script>
+</body>
+</html>
