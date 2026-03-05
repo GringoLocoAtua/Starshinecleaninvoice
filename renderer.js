@@ -1,76 +1,22 @@
-/* Starshine Invoice Pro — Apple UI Renderer (DOM-driven)
-   - Matches your Apple “update screen” index.html
-   - Dashboard / New Invoice / Clients
-   - LocalStorage: invoices, clients, invoiceCounter, settings
-   - Export PDF uses Electron preload API: window.starshineAPI.exportPDF()
-     (no window.print => no blank PDFs)
-*/
-
-(function () {
-  const LS = {
-    invoices: "invoices",
-    clients: "clients",
-    invoiceCounter: "invoiceCounter",
-    settings: "settings",
+/* Starshine Invoice Pro (PWA) */
+(() => {
+  const LS_KEYS = {
+    invoices: "starshine_invoices_v1",
+    clients: "starshine_clients_v1",
+    nextInv: "starshine_next_invoice_no_v1",
+    lastDraft: "starshine_last_draft_v1",
   };
 
-  const DEFAULT_SETTINGS = {
-    businessName: "Starshine Cleaning Services",
-    businessABN: "55146340682",
-    businessPhone: "",
-    businessEmail: "",
-    businessAddress1: "42 Bayswater Rd",
-    businessAddress2: "Rushcutters Bay NSW 2011",
-    businessAddress3: "Australia",
-    payAccountName: "Karla Diaz Toledo",
-    payAccountNumber: "167592159",
-    payBankName: "ANZ Plus",
-    payBSB: "014111",
-  };
+  const $ = (id) => document.getElementById(id);
+  const toastEl = () => $("toast");
 
-  let invoices = [];
-  let clients = [];
-  let settings = { ...DEFAULT_SETTINGS };
-  let currentPreviewInvoice = null;
-
-  // ---------- utils ----------
-  function $(id) {
-    return document.getElementById(id);
-  }
-
-  function safeJSONParse(raw, fallback) {
-    try {
-      if (!raw) return fallback;
-      return JSON.parse(raw);
-    } catch {
-      return fallback;
-    }
-  }
-
-  function loadState() {
-    invoices = safeJSONParse(localStorage.getItem(LS.invoices), []);
-    clients = safeJSONParse(localStorage.getItem(LS.clients), []);
-    const s = safeJSONParse(localStorage.getItem(LS.settings), null);
-    if (s && typeof s === "object") settings = { ...DEFAULT_SETTINGS, ...s };
-
-    // legacy: if some older key existed, you can add migration here later.
-    if (!Array.isArray(invoices)) invoices = [];
-    if (!Array.isArray(clients)) clients = [];
-  }
-
-  function saveState() {
-    localStorage.setItem(LS.invoices, JSON.stringify(invoices));
-    localStorage.setItem(LS.clients, JSON.stringify(clients));
-    localStorage.setItem(LS.settings, JSON.stringify(settings));
-  }
-
-  function toast(title, detail = "") {
-    const t = $("toast");
-    if (!t) return;
-    t.innerHTML = `${escapeHtml(title)}${detail ? `<small>${escapeHtml(detail)}</small>` : ""}`;
-    t.classList.add("show");
-    clearTimeout(toast._timer);
-    toast._timer = setTimeout(() => t.classList.remove("show"), 2200);
+  function toast(msg, sub = "") {
+    const el = toastEl();
+    if (!el) return;
+    el.innerHTML = `${escapeHtml(msg)}${sub ? `<small>${escapeHtml(sub)}</small>` : ""}`;
+    el.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.remove("show"), 2400);
   }
 
   function escapeHtml(s) {
@@ -82,55 +28,124 @@
       .replaceAll("'", "&#039;");
   }
 
-  function money(n) {
-    const x = Number(n);
-    if (!isFinite(x)) return "0.00";
-    return x.toFixed(2);
+  function loadLS(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      return JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
   }
 
-  function parseMoney(v) {
-    const x = Number(String(v || "").replace(/[^0-9.\-]/g, ""));
-    return isFinite(x) ? x : 0;
+  function saveLS(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
   }
 
-  function parseQty(v) {
-    const x = Number(String(v || "").replace(/[^0-9.\-]/g, ""));
-    return isFinite(x) ? x : 0;
-  }
-
-  function todayDDMMYYYY() {
+  function nowISODate() {
     const d = new Date();
-    const dd = String(d.getDate()).padStart(2, "0");
+    const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yyyy = String(d.getFullYear());
-    return `${dd}/${mm}/${yyyy}`;
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
   }
 
-  function addDaysDDMMYYYY(days) {
-    const d = new Date();
+  function addDaysISO(iso, days) {
+    const d = iso ? new Date(iso + "T00:00:00") : new Date();
     d.setDate(d.getDate() + days);
-    const dd = String(d.getDate()).padStart(2, "0");
+    const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yyyy = String(d.getFullYear());
-    return `${dd}/${mm}/${yyyy}`;
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
   }
 
-  function getInvoiceCounter() {
-    const raw = localStorage.getItem(LS.invoiceCounter);
-    const n = parseInt(raw || "1200", 10);
-    return Number.isFinite(n) ? n : 1200;
+  function nextInvoiceRef() {
+    const n = Number(localStorage.getItem(LS_KEYS.nextInv) || "1");
+    localStorage.setItem(LS_KEYS.nextInv, String(n + 1));
+    return `INV-${String(n).padStart(6, "0")}`;
   }
 
-  function setInvoiceCounter(n) {
-    const nn = Number(n);
-    if (!Number.isFinite(nn)) return;
-    localStorage.setItem(LS.invoiceCounter, String(nn));
+  function money(n) {
+    const num = Number(n || 0);
+    return num.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
   }
 
-  function setActiveNav(which) {
-    $("navDash")?.classList.toggle("active", which === "dash");
-    $("navNew")?.classList.toggle("active", which === "new");
-    $("navClients")?.classList.toggle("active", which === "clients");
+  // --- Mobile viewport stability (iOS address bar + no random zoom) ---
+  function applyVH() {
+    const vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty("--vh", `${vh}px`);
+  }
+  window.addEventListener("resize", () => {
+    clearTimeout(applyVH._t);
+    applyVH._t = setTimeout(applyVH, 80);
+  });
+  applyVH();
+
+  // --- Service Worker ---
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+    });
+  }
+
+  // --- State ---
+  let invoices = loadLS(LS_KEYS.invoices, []);
+  let clients = loadLS(LS_KEYS.clients, []);
+  let draft = loadLS(LS_KEYS.lastDraft, null);
+
+  // Expose minimal globals used by HTML
+  window.showDashboard = showDashboard;
+  window.showNewInvoice = showNewInvoice;
+  window.showClients = showClients;
+  window.loadHistory = loadHistory;
+
+  window.addRow = addRow;
+  window.calculate = calculate;
+  window.saveInvoice = saveInvoice;
+  window.previewInvoice = previewInvoice;
+
+  window.clearAllInvoices = clearAllInvoices;
+
+  window.applySelectedClient = applySelectedClient;
+  window.saveClientFromInvoice = saveClientFromInvoice;
+  window.clearClientFields = clearClientFields;
+
+  window.loadClientsUI = loadClientsUI;
+  window.clearClientForm = clearClientForm;
+  window.saveClient = saveClient;
+  window.useClientFormForInvoice = useClientFormForInvoice;
+  window.deleteClientFromForm = deleteClientFromForm;
+
+  // For preview actions
+  window.backFromPreview = backFromPreview;
+  window.exportPdf = exportPdf;
+
+  // --- Init ---
+  document.addEventListener("DOMContentLoaded", () => {
+    // If tabs exist, default to dashboard
+    setActiveNav("navDash");
+
+    // seed new invoice fields
+    resetInvoiceForm(true);
+
+    // restore draft (optional)
+    if (draft && $("clientName") && $("itemsTable")) {
+      try {
+        hydrateInvoiceForm(draft);
+      } catch {}
+    }
+
+    loadClientsDropdown();
+    loadHistory();
+  });
+
+  // --- Nav helpers ---
+  function setActiveNav(activeId) {
+    ["navDash", "navNew", "navClients"].forEach((id) => {
+      const b = $(id);
+      if (!b) return;
+      b.classList.toggle("active", id === activeId);
+    });
   }
 
   function showOnly(sectionId) {
@@ -142,520 +157,143 @@
     });
   }
 
-  // ---------- invoice form ----------
-  function ensureInvoiceDefaults() {
-    $("invoiceNo").value = String(getInvoiceCounter());
-    $("invoiceDate").value = $("invoiceDate").value || todayDDMMYYYY();
-    $("dueDate").value = $("dueDate").value || addDaysDDMMYYYY(7);
-    if ($("gstToggle").checked === false && $("gstToggle").dataset.init !== "1") {
-      $("gstToggle").checked = true;
-      $("gstToggle").dataset.init = "1";
-    }
-  }
-
-  function clearClientFields() {
-    $("clientName").value = "";
-    $("clientAddress").value = "";
-    $("clientPhone").value = "";
-    $("clientEmail").value = "";
-    $("clientAbn").value = "";
-    $("savedClientSelect").value = "";
-    toast("Client cleared");
-  }
-
-  function addRow(prefill = null) {
-    const tbody = $("itemsTable").querySelector("tbody");
-    const tr = document.createElement("tr");
-
-    const desc = document.createElement("input");
-    desc.value = prefill?.desc ?? "General Clean";
-    desc.placeholder = "Description";
-    desc.addEventListener("input", calculate);
-
-    const price = document.createElement("input");
-    price.value = prefill?.price != null ? String(prefill.price) : "0";
-    price.placeholder = "0";
-    price.addEventListener("input", calculate);
-
-    const qty = document.createElement("input");
-    qty.value = prefill?.qty != null ? String(prefill.qty) : "1";
-    qty.placeholder = "1";
-    qty.addEventListener("input", calculate);
-
-    const amountTd = document.createElement("td");
-    amountTd.className = "amount";
-    amountTd.textContent = "0.00";
-
-    const delBtn = document.createElement("button");
-    delBtn.className = "btn danger";
-    delBtn.style.padding = "8px 12px";
-    delBtn.textContent = "X";
-    delBtn.addEventListener("click", () => {
-      tr.remove();
-      calculate();
-    });
-
-    const td1 = document.createElement("td");
-    const td2 = document.createElement("td");
-    const td3 = document.createElement("td");
-    const td5 = document.createElement("td");
-
-    td1.appendChild(desc);
-    td2.appendChild(price);
-    td3.appendChild(qty);
-    td5.appendChild(delBtn);
-
-    tr.appendChild(td1);
-    tr.appendChild(td2);
-    tr.appendChild(td3);
-    tr.appendChild(amountTd);
-    tr.appendChild(td5);
-
-    tbody.appendChild(tr);
-    calculate();
-  }
-
-  function getItemsFromTable() {
-    const rows = Array.from($("itemsTable").querySelector("tbody").querySelectorAll("tr"));
-    return rows.map((tr) => {
-      const inputs = tr.querySelectorAll("input");
-      const desc = (inputs[0]?.value || "").trim() || "—";
-      const price = parseMoney(inputs[1]?.value);
-      const qty = parseQty(inputs[2]?.value);
-      return { desc, price, qty };
-    });
-  }
-
-  function calculate() {
-    const rows = Array.from($("itemsTable").querySelector("tbody").querySelectorAll("tr"));
-    let subtotal = 0;
-
-    rows.forEach((tr) => {
-      const inputs = tr.querySelectorAll("input");
-      const price = parseMoney(inputs[1]?.value);
-      const qty = parseQty(inputs[2]?.value);
-      const amt = price * qty;
-      subtotal += amt;
-
-      const amtTd = tr.querySelector("td.amount");
-      if (amtTd) amtTd.textContent = money(amt);
-    });
-
-    const gstOn = !!$("gstToggle").checked;
-    const gst = gstOn ? subtotal * 0.1 : 0;
-    const total = subtotal + gst;
-
-    $("summary").innerHTML =
-      `Subtotal: <span class="muted">$${money(subtotal)}</span>` +
-      ` &nbsp; | &nbsp; GST: <span class="muted">$${money(gst)}</span>` +
-      ` &nbsp; | &nbsp; Total: <span>$${money(total)}</span>`;
-
-    return { subtotal, gst, total };
-  }
-
-  function getInvoiceFromForm() {
-    const invoiceNo = String($("invoiceNo").value || "").trim();
-    const invoiceDate = String($("invoiceDate").value || "").trim();
-    const dueDate = String($("dueDate").value || "").trim();
-
-    const clientName = String($("clientName").value || "").trim();
-    const clientAddress = String($("clientAddress").value || "").trim();
-    const clientPhone = String($("clientPhone").value || "").trim();
-    const clientEmail = String($("clientEmail").value || "").trim();
-    const clientAbn = String($("clientAbn").value || "").trim();
-
-    const items = getItemsFromTable();
-    const totals = calculate();
-
-    return {
-      invoiceNo,
-      invoiceDate,
-      dueDate,
-      clientName,
-      clientAddress,
-      clientPhone,
-      clientEmail,
-      clientABN: clientAbn, // matches main.js template field
-      clientAbn, // keep legacy alias too
-      gstEnabled: !!$("gstToggle").checked,
-      items,
-      subtotal: totals.subtotal,
-      gst: totals.gst,
-      total: totals.total,
-      updatedAt: new Date().toISOString(),
-    };
-  }
-
-  function validateInvoice(inv) {
-    if (!inv.invoiceNo) return "Invoice number missing.";
-    if (!inv.clientName) return "Client name required.";
-    if (!inv.clientAddress) return "Client address required.";
-    if (!inv.items || inv.items.length === 0) return "Add at least one line item.";
-    return "";
-  }
-
-  function saveInvoice() {
-    const inv = getInvoiceFromForm();
-    const err = validateInvoice(inv);
-    if (err) return toast("Can't save invoice", err);
-
-    const idx = invoices.findIndex((x) => String(x.invoiceNo) === String(inv.invoiceNo));
-    if (idx >= 0) invoices[idx] = { ...invoices[idx], ...inv };
-    else invoices.unshift({ ...inv, createdAt: new Date().toISOString() });
-
-    const n = parseInt(inv.invoiceNo, 10);
-    if (Number.isFinite(n)) setInvoiceCounter(Math.max(getInvoiceCounter(), n + 1));
-    $("invoiceNo").value = String(getInvoiceCounter());
-
-    saveState();
-    toast("Invoice saved", `#${inv.invoiceNo} — $${money(inv.total)}`);
-    showDashboard();
-  }
-
-  function clearAllInvoices() {
-    if (!confirm("Clear ALL saved invoices?")) return;
-    invoices = [];
-    saveState();
+  function showDashboard() {
+    setActiveNav("navDash");
+    showOnly("dashboard");
     loadHistory();
-    toast("Invoices cleared");
   }
 
-  // ---------- dashboard ----------
-  function loadHistory() {
-    const q = String($("searchBox").value || "").trim().toLowerCase();
-    const list = $("historyList");
-    list.innerHTML = "";
-
-    const filtered = invoices
-      .slice()
-      .sort((a, b) => Number(b.invoiceNo || 0) - Number(a.invoiceNo || 0))
-      .filter((inv) => {
-        if (!q) return true;
-        const blob = [
-          inv.invoiceNo,
-          inv.clientName,
-          inv.clientPhone,
-          inv.clientEmail,
-          inv.clientAddress,
-        ]
-          .join(" ")
-          .toLowerCase();
-        return blob.includes(q);
-      });
-
-    if (filtered.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "muted";
-      empty.style.fontWeight = "850";
-      empty.textContent = "No invoices saved yet.";
-      list.appendChild(empty);
-      return;
-    }
-
-    filtered.forEach((inv) => {
-      const card = document.createElement("div");
-      card.className = "card";
-
-      const left = document.createElement("div");
-      left.className = "card-left";
-      left.innerHTML = `
-        <div class="title">#${escapeHtml(inv.invoiceNo)} — ${escapeHtml(inv.clientName || "Client")}</div>
-        <div class="meta">${escapeHtml(inv.invoiceDate || "")} → Due ${escapeHtml(inv.dueDate || "")}</div>
-      `;
-
-      const right = document.createElement("div");
-      right.className = "card-right";
-
-      const totalPill = document.createElement("div");
-      totalPill.className = "pill";
-      totalPill.textContent = `$${money(inv.total ?? 0)}`;
-
-      const openBtn = document.createElement("button");
-      openBtn.className = "btn";
-      openBtn.textContent = "Open / Preview";
-      openBtn.onclick = () => openInvoice(inv.invoiceNo);
-
-      const pdfBtn = document.createElement("button");
-      pdfBtn.className = "btn primary";
-      pdfBtn.textContent = "Export PDF";
-      pdfBtn.onclick = () => exportPDF(inv);
-
-      const delBtn = document.createElement("button");
-      delBtn.className = "btn danger";
-      delBtn.textContent = "Delete";
-      delBtn.onclick = () => {
-        if (!confirm(`Delete invoice #${inv.invoiceNo}?`)) return;
-        invoices = invoices.filter((x) => String(x.invoiceNo) !== String(inv.invoiceNo));
-        saveState();
-        loadHistory();
-        toast("Invoice deleted", `#${inv.invoiceNo}`);
-      };
-
-      right.appendChild(totalPill);
-      right.appendChild(openBtn);
-      right.appendChild(pdfBtn);
-      right.appendChild(delBtn);
-
-      card.appendChild(left);
-      card.appendChild(right);
-      list.appendChild(card);
-    });
+  function showNewInvoice() {
+    setActiveNav("navNew");
+    showOnly("newInvoice");
+    // ensure at least one row
+    if ($("itemsTable") && $("itemsTable").querySelectorAll("tbody tr").length === 0) addRow();
   }
 
-  function openInvoice(invoiceNo) {
-    const inv = invoices.find((x) => String(x.invoiceNo) === String(invoiceNo));
-    if (!inv) return toast("Not found", `Invoice #${invoiceNo}`);
-
-    // Load into form (optional), and also set preview
-    $("invoiceNo").value = String(inv.invoiceNo || "");
-    $("invoiceDate").value = String(inv.invoiceDate || "");
-    $("dueDate").value = String(inv.dueDate || "");
-
-    $("clientName").value = String(inv.clientName || "");
-    $("clientAddress").value = String(inv.clientAddress || "");
-    $("clientPhone").value = String(inv.clientPhone || "");
-    $("clientEmail").value = String(inv.clientEmail || "");
-    $("clientAbn").value = String(inv.clientABN || inv.clientAbn || "");
-
-    $("gstToggle").checked = !!inv.gstEnabled;
-
-    // items
-    const tbody = $("itemsTable").querySelector("tbody");
-    tbody.innerHTML = "";
-    (inv.items || []).forEach((it) => addRow({ desc: it.desc, price: it.price, qty: it.qty }));
-    if ((inv.items || []).length === 0) addRow();
-
-    currentPreviewInvoice = { ...inv };
-    showNewInvoice(); // show form first
-    previewInvoice(); // then show preview
+  function showClients() {
+    setActiveNav("navClients");
+    showOnly("clients");
+    loadClientsUI();
   }
 
-  // ---------- preview + export ----------
-  function buildPreviewHTML(inv) {
-    const s = settings || DEFAULT_SETTINGS;
-    const items = inv.items || [];
-    const subtotal = Number(inv.subtotal) || 0;
-    const gst = Number(inv.gst) || 0;
-    const total = Number(inv.total) || 0;
-
-    const rows = items
-      .map((it) => {
-        const amt = (Number(it.price) || 0) * (Number(it.qty) || 0);
-        return `
-          <tr>
-            <td>${escapeHtml(it.desc)}</td>
-            <td style="text-align:right;">$${money(it.price)}</td>
-            <td style="text-align:right;">${money(it.qty)}</td>
-            <td style="text-align:right;font-weight:900;">$${money(amt)}</td>
-          </tr>
-        `;
-      })
-      .join("");
-
-    return `
-      <div class="invoice-wrap">
-        <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;">
-          <div style="display:flex;gap:14px;align-items:flex-start;">
-            <img src="assets/logo.png" alt="Starshine Logo" style="width:110px;border-radius:10px;" onerror="this.style.display='none'"/>
-            <div style="font-size:12px;line-height:1.35;color:#222;margin-top:6px;">
-              <div style="font-weight:950;font-size:16px;">${escapeHtml(s.businessName)}</div>
-              <div><strong>ABN:</strong> ${escapeHtml(s.businessABN)}</div>
-              <div>${escapeHtml(s.businessAddress1)}</div>
-              <div>${escapeHtml(s.businessAddress2)}</div>
-              <div>${escapeHtml(s.businessAddress3)}</div>
-              ${s.businessPhone ? `<div><strong>Phone:</strong> ${escapeHtml(s.businessPhone)}</div>` : ""}
-              ${s.businessEmail ? `<div>${escapeHtml(s.businessEmail)}</div>` : ""}
-            </div>
-          </div>
-          <div style="text-align:right;">
-            <div style="font-weight:950;letter-spacing:.6px;">REGULAR INVOICE</div>
-            <div style="margin-top:10px;font-size:12px;line-height:1.55;">
-              <div><strong>Invoice date:</strong> ${escapeHtml(inv.invoiceDate)}</div>
-              <div><strong>Due date:</strong> ${escapeHtml(inv.dueDate)}</div>
-              <div><strong>Invoice no:</strong> ${escapeHtml(inv.invoiceNo)}</div>
-            </div>
-          </div>
-        </div>
-
-        <div style="display:flex;justify-content:space-between;gap:16px;margin-top:16px;">
-          <div style="font-size:12px;line-height:1.55;">
-            <div style="font-size:11px;color:#666;font-weight:950;letter-spacing:.8px;">BILL TO</div>
-            <div style="font-weight:900;">${escapeHtml(inv.clientName)}</div>
-            <div>${escapeHtml(inv.clientAddress)}</div>
-            ${inv.clientPhone ? `<div>Phone: ${escapeHtml(inv.clientPhone)}</div>` : ""}
-            ${inv.clientEmail ? `<div>Email: ${escapeHtml(inv.clientEmail)}</div>` : ""}
-            ${(inv.clientABN || inv.clientAbn) ? `<div>ABN: ${escapeHtml(inv.clientABN || inv.clientAbn)}</div>` : ""}
-          </div>
-        </div>
-
-        <div style="margin-top:14px;border:1px solid #e6e6e6;border-radius:12px;overflow:hidden;">
-          <div style="display:grid;grid-template-columns: 1.6fr .5fr .4fr .5fr;gap:10px;padding:10px 12px;background:#f3f3f3;color:#666;font-size:11px;font-weight:950;letter-spacing:.8px;">
-            <div>PRODUCT</div><div style="text-align:right;">PRICE</div><div style="text-align:right;">QTY</div><div style="text-align:right;">AMOUNT</div>
-          </div>
-          <div>
-            <table style="width:100%;border-collapse:collapse;">
-              <tbody>
-                ${rows || `<tr><td>—</td><td style="text-align:right;">$0.00</td><td style="text-align:right;">0.00</td><td style="text-align:right;">$0.00</td></tr>`}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div style="display:flex;justify-content:flex-end;margin-top:12px;">
-          <div style="width:320px;font-size:12px;line-height:1.7;">
-            <div style="display:flex;justify-content:space-between;"><span>Net amount</span><span>$${money(subtotal)}</span></div>
-            <div style="display:flex;justify-content:space-between;"><span>GST</span><span>$${money(gst)}</span></div>
-            <div style="margin-top:6px;padding-top:8px;border-top:2px solid #111;display:flex;justify-content:space-between;font-weight:950;">
-              <span>Total due (AUD)</span><span>$${money(total)}</span>
-            </div>
-          </div>
-        </div>
-
-        <div style="margin-top:14px;border-top:2px solid #e7d47a;padding-top:12px;display:flex;justify-content:space-between;gap:20px;">
-          <div style="flex:1;font-size:12px;line-height:1.6;">
-            <div style="font-weight:950;">PAYMENT INFORMATION</div>
-            <div><strong>Invoice number:</strong> ${escapeHtml(inv.invoiceNo)}</div>
-            <div><strong>Amount (AUD):</strong> $${money(total)}</div>
-            <div style="font-size:11px;color:#666;margin-top:6px;">Please add the invoice number to the payment transfer.</div>
-          </div>
-          <div style="flex:1;font-size:12px;line-height:1.6;">
-            <div style="font-weight:950;">&nbsp;</div>
-            <div><strong>Account name:</strong> ${escapeHtml(s.payAccountName)}</div>
-            <div><strong>Account number:</strong> ${escapeHtml(s.payAccountNumber)}</div>
-            <div><strong>Bank name:</strong> ${escapeHtml(s.payBankName)}</div>
-            <div><strong>BSB:</strong> ${escapeHtml(s.payBSB)}</div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  function previewInvoice() {
-    const inv = getInvoiceFromForm();
-    const err = validateInvoice(inv);
-    if (err) return toast("Can't preview invoice", err);
-
-    currentPreviewInvoice = inv;
-
-    const preview = $("previewSection");
-    preview.innerHTML = `
-      ${buildPreviewHTML(inv)}
-      <div class="preview-actions">
-        <button class="btn" onclick="showNewInvoice()">Back</button>
-        <button class="btn primary" onclick="exportPDF()">Export PDF</button>
-      </div>
-    `;
-
-    showOnly("previewSection");
-    setActiveNav(""); // no nav highlight in preview
-  }
-
-  async function exportPDF(invMaybe) {
-    const inv = invMaybe || currentPreviewInvoice || getInvoiceFromForm();
-    const err = validateInvoice(inv);
-    if (err) return toast("Can't export PDF", err);
-
-    // If electron preload is available, use real printToPDF (fixes blank PDFs)
-    if (window.starshineAPI && typeof window.starshineAPI.exportPDF === "function") {
-      saveState();
-      const res = await window.starshineAPI.exportPDF(inv, settings);
-      if (res?.ok && res.filePath) {
-        toast("PDF saved", res.filePath);
-        // auto-open? ask (keeps it clean)
-        setTimeout(async () => {
-          const open = confirm(`Saved PDF:\n\n${res.filePath}\n\nOpen it now?`);
-          if (open && window.starshineAPI?.openPath) await window.starshineAPI.openPath(res.filePath);
-        }, 50);
-        return;
-      }
-      if (res?.canceled) return;
-      return toast("PDF export failed", res?.error || "Unknown error");
-    }
-
-    // Fallback (browser)
-    toast("Export fallback", "Using print dialog");
-    window.print();
-  }
-
-  // ---------- clients ----------
-  function loadSavedClientSelect() {
+  // --- Clients ---
+  function loadClientsDropdown() {
     const sel = $("savedClientSelect");
+    if (!sel) return;
+    const current = sel.value;
     sel.innerHTML = `<option value="">— Select saved client —</option>`;
     clients
       .slice()
-      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
       .forEach((c) => {
         const opt = document.createElement("option");
         opt.value = c.id;
-        opt.textContent = `${c.name}${c.phone ? " — " + c.phone : ""}`;
+        opt.textContent = `${c.name || "Unnamed"}${c.phone ? " — " + c.phone : ""}`;
         sel.appendChild(opt);
       });
+    if (current) sel.value = current;
   }
 
   function applySelectedClient() {
-    const id = $("savedClientSelect").value;
-    if (!id) return;
-    const c = clients.find((x) => x.id === id);
+    const sel = $("savedClientSelect");
+    if (!sel || !sel.value) return;
+    const c = clients.find((x) => x.id === sel.value);
     if (!c) return;
-
     $("clientName").value = c.name || "";
     $("clientAddress").value = c.address || "";
     $("clientPhone").value = c.phone || "";
     $("clientEmail").value = c.email || "";
     $("clientAbn").value = c.abn || "";
+    toast("Client applied");
+  }
 
-    toast("Client applied", c.name || "");
+  function normalizePhone(p) {
+    return String(p || "").replace(/[^\d+]/g, "").trim();
   }
 
   function saveClientFromInvoice() {
-    const name = String($("clientName").value || "").trim();
-    const address = String($("clientAddress").value || "").trim();
-    const phone = String($("clientPhone").value || "").trim();
-    const email = String($("clientEmail").value || "").trim();
-    const abn = String($("clientAbn").value || "").trim();
+    const name = $("clientName")?.value?.trim() || "";
+    const address = $("clientAddress")?.value?.trim() || "";
+    const phone = normalizePhone($("clientPhone")?.value);
+    const email = $("clientEmail")?.value?.trim() || "";
+    const abn = $("clientAbn")?.value?.trim() || "";
 
-    if (!name) return toast("Can't save client", "Client name required.");
-    if (!address) return toast("Can't save client", "Client address required.");
+    if (!name) return toast("Client name required");
+    const key = phone || email || (name + "|" + address);
 
-    // upsert by name+phone (good enough for now)
-    const existing = clients.find((c) => (c.name || "").toLowerCase() === name.toLowerCase() && (c.phone || "") === phone);
-    if (existing) {
-      existing.address = address;
-      existing.phone = phone;
-      existing.email = email;
-      existing.abn = abn;
-      existing.updatedAt = new Date().toISOString();
-    } else {
-      clients.unshift({
-        id: (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)),
-        name,
-        address,
-        phone,
-        email,
-        abn,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-    }
+    let existing = null;
+    if (phone) existing = clients.find((c) => normalizePhone(c.phone) === phone);
+    if (!existing && email) existing = clients.find((c) => (c.email || "").toLowerCase() === email.toLowerCase());
+    if (!existing) existing = clients.find((c) => (c.key || "") === key);
 
-    saveState();
-    loadSavedClientSelect();
-    loadClientsUI();
-    toast("Client saved", name);
+    const obj = existing || { id: crypto.randomUUID?.() || String(Date.now()), createdAt: Date.now() };
+    obj.name = name;
+    obj.address = address;
+    obj.phone = phone;
+    obj.email = email;
+    obj.abn = abn;
+    obj.key = key;
+    obj.updatedAt = Date.now();
+
+    if (!existing) clients.unshift(obj);
+
+    saveLS(LS_KEYS.clients, clients);
+    loadClientsDropdown();
+    toast(existing ? "Client updated" : "Client saved");
   }
 
-  function clearClientForm() {
-    $("c_id").value = "";
-    $("c_name").value = "";
-    $("c_address").value = "";
-    $("c_phone").value = "";
-    $("c_email").value = "";
-    $("c_abn").value = "";
-    toast("Client form cleared");
+  function clearClientFields() {
+    ["clientName", "clientAddress", "clientPhone", "clientEmail", "clientAbn"].forEach((id) => {
+      const el = $(id);
+      if (el) el.value = "";
+    });
+    const sel = $("savedClientSelect");
+    if (sel) sel.value = "";
+    toast("Cleared");
+  }
+
+  function loadClientsUI() {
+    const list = $("clientsList");
+    if (!list) return;
+
+    const q = ($("clientsSearchBox")?.value || "").trim().toLowerCase();
+
+    const filtered = clients.filter((c) => {
+      const hay = `${c.name || ""} ${c.phone || ""} ${c.address || ""} ${c.email || ""} ${c.abn || ""}`.toLowerCase();
+      return !q || hay.includes(q);
+    });
+
+    list.innerHTML = "";
+    if (filtered.length === 0) {
+      list.innerHTML = `<div class="muted" style="padding:10px;">No clients yet.</div>`;
+      return;
+    }
+
+    filtered.forEach((c) => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <div class="card-left">
+          <div class="title">${escapeHtml(c.name || "Unnamed")}</div>
+          <div class="meta">${escapeHtml(c.address || "")}</div>
+          <div class="meta">${escapeHtml(c.phone || "")}${c.email ? " • " + escapeHtml(c.email) : ""}${c.abn ? " • ABN " + escapeHtml(c.abn) : ""}</div>
+        </div>
+        <div class="card-right">
+          <button class="btn ghost" data-act="edit">Edit</button>
+          <button class="btn" data-act="invoice">Invoice</button>
+        </div>
+      `;
+      card.querySelector('[data-act="edit"]').onclick = () => fillClientForm(c);
+      card.querySelector('[data-act="invoice"]').onclick = () => {
+        fillClientForm(c);
+        useClientFormForInvoice();
+      };
+      list.appendChild(card);
+    });
   }
 
   function fillClientForm(c) {
-    $("c_id").value = c.id;
+    $("c_id").value = c.id || "";
     $("c_name").value = c.name || "";
     $("c_address").value = c.address || "";
     $("c_phone").value = c.phone || "";
@@ -663,247 +301,514 @@
     $("c_abn").value = c.abn || "";
   }
 
-  function saveClient() {
-    const id = String($("c_id").value || "").trim();
-    const name = String($("c_name").value || "").trim();
-    const address = String($("c_address").value || "").trim();
-    const phone = String($("c_phone").value || "").trim();
-    const email = String($("c_email").value || "").trim();
-    const abn = String($("c_abn").value || "").trim();
-
-    if (!name) return toast("Can't save client", "Client name required.");
-    if (!address) return toast("Can't save client", "Client address required.");
-
-    if (id) {
-      const c = clients.find((x) => x.id === id);
-      if (!c) return toast("Not found", "Client record missing.");
-      c.name = name;
-      c.address = address;
-      c.phone = phone;
-      c.email = email;
-      c.abn = abn;
-      c.updatedAt = new Date().toISOString();
-    } else {
-      clients.unshift({
-        id: (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)),
-        name,
-        address,
-        phone,
-        email,
-        abn,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-    }
-
-    saveState();
-    loadSavedClientSelect();
-    loadClientsUI();
-    toast("Client saved", name);
+  function clearClientForm() {
+    ["c_id", "c_name", "c_address", "c_phone", "c_email", "c_abn"].forEach((id) => {
+      const el = $(id);
+      if (el) el.value = "";
+    });
+    toast("New client");
   }
 
-  function deleteClientFromForm() {
-    const id = String($("c_id").value || "").trim();
-    if (!id) return toast("No client selected");
-    const c = clients.find((x) => x.id === id);
-    if (!c) return toast("Not found", "Client record missing.");
-    if (!confirm(`Delete client "${c.name}"?`)) return;
+  function saveClient() {
+    const id = $("c_id").value || (crypto.randomUUID?.() || String(Date.now()));
+    const name = $("c_name").value.trim();
+    const address = $("c_address").value.trim();
+    const phone = normalizePhone($("c_phone").value);
+    const email = $("c_email").value.trim();
+    const abn = $("c_abn").value.trim();
+    if (!name) return toast("Client name required");
 
-    clients = clients.filter((x) => x.id !== id);
-    saveState();
-    loadSavedClientSelect();
+    let existing = clients.find((c) => c.id === id);
+    if (!existing) {
+      existing = { id, createdAt: Date.now() };
+      clients.unshift(existing);
+    }
+    existing.name = name;
+    existing.address = address;
+    existing.phone = phone;
+    existing.email = email;
+    existing.abn = abn;
+    existing.updatedAt = Date.now();
+    existing.key = phone || email || (name + "|" + address);
+
+    saveLS(LS_KEYS.clients, clients);
     loadClientsUI();
-    clearClientForm();
-    toast("Client deleted", c.name);
+    loadClientsDropdown();
+    toast("Client saved");
   }
 
   function useClientFormForInvoice() {
-    const name = String($("c_name").value || "").trim();
-    const address = String($("c_address").value || "").trim();
-    const phone = String($("c_phone").value || "").trim();
-    const email = String($("c_email").value || "").trim();
-    const abn = String($("c_abn").value || "").trim();
-
-    if (!name || !address) return toast("Can't use client", "Name + address required.");
-
+    const name = $("c_name")?.value?.trim() || "";
+    if (!name) return toast("Pick a client first");
     $("clientName").value = name;
-    $("clientAddress").value = address;
-    $("clientPhone").value = phone;
-    $("clientEmail").value = email;
-    $("clientAbn").value = abn;
+    $("clientAddress").value = $("c_address").value.trim();
+    $("clientPhone").value = $("c_phone").value.trim();
+    $("clientEmail").value = $("c_email").value.trim();
+    $("clientAbn").value = $("c_abn").value.trim();
 
-    toast("Client applied", name);
+    // select in dropdown if matches
+    const phone = normalizePhone($("c_phone").value);
+    const match = clients.find((c) => (c.id === $("c_id").value) || (phone && normalizePhone(c.phone) === phone));
+    if (match && $("savedClientSelect")) $("savedClientSelect").value = match.id;
+
     showNewInvoice();
+    toast("Client loaded into invoice");
   }
 
-  function loadClientsUI() {
-    const q = String($("clientsSearchBox").value || "").trim().toLowerCase();
-    const list = $("clientsList");
-    list.innerHTML = "";
+  function deleteClientFromForm() {
+    const id = $("c_id").value;
+    if (!id) return toast("No client selected");
+    clients = clients.filter((c) => c.id !== id);
+    saveLS(LS_KEYS.clients, clients);
+    clearClientForm();
+    loadClientsUI();
+    loadClientsDropdown();
+    toast("Client deleted");
+  }
 
-    const filtered = clients
-      .slice()
-      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
-      .filter((c) => {
-        if (!q) return true;
-        const blob = [c.name, c.phone, c.address, c.email, c.abn].join(" ").toLowerCase();
-        return blob.includes(q);
-      });
+  // --- Invoice form ---
+  function resetInvoiceForm(keepDraft = false) {
+    if ($("invoiceNo")) $("invoiceNo").value = nextInvoiceRef();
+    if ($("invoiceDate")) $("invoiceDate").value = nowISODate();
+    if ($("dueDate")) $("dueDate").value = addDaysISO(nowISODate(), 7);
+    if ($("gstToggle")) $("gstToggle").checked = false;
 
-    if (filtered.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "muted";
-      empty.style.fontWeight = "850";
-      empty.textContent = "No clients saved yet.";
-      list.appendChild(empty);
-      return;
+    if (!keepDraft) {
+      clearClientFields();
+      clearItems();
+    } else {
+      // ensure items exists
+      if ($("itemsTable") && $("itemsTable").querySelectorAll("tbody tr").length === 0) addRow();
     }
-
-    filtered.forEach((c) => {
-      const card = document.createElement("div");
-      card.className = "card";
-
-      const left = document.createElement("div");
-      left.className = "card-left";
-      left.innerHTML = `
-        <div class="title">${escapeHtml(c.name || "Client")}</div>
-        <div class="meta">${escapeHtml([c.phone, c.email].filter(Boolean).join(" • ") || c.address || "")}</div>
-      `;
-
-      const right = document.createElement("div");
-      right.className = "card-right";
-
-      const useBtn = document.createElement("button");
-      useBtn.className = "btn primary";
-      useBtn.textContent = "Use";
-      useBtn.onclick = () => {
-        $("clientName").value = c.name || "";
-        $("clientAddress").value = c.address || "";
-        $("clientPhone").value = c.phone || "";
-        $("clientEmail").value = c.email || "";
-        $("clientAbn").value = c.abn || "";
-        $("savedClientSelect").value = c.id;
-        toast("Client applied", c.name || "");
-        showNewInvoice();
-      };
-
-      const editBtn = document.createElement("button");
-      editBtn.className = "btn";
-      editBtn.textContent = "Edit";
-      editBtn.onclick = () => fillClientForm(c);
-
-      const delBtn = document.createElement("button");
-      delBtn.className = "btn danger";
-      delBtn.textContent = "Delete";
-      delBtn.onclick = () => {
-        if (!confirm(`Delete client "${c.name}"?`)) return;
-        clients = clients.filter((x) => x.id !== c.id);
-        saveState();
-        loadSavedClientSelect();
-        loadClientsUI();
-        toast("Client deleted", c.name);
-      };
-
-      right.appendChild(useBtn);
-      right.appendChild(editBtn);
-      right.appendChild(delBtn);
-
-      card.appendChild(left);
-      card.appendChild(right);
-      list.appendChild(card);
-    });
-  }
-
-  // ---------- company settings quick editor (adds button into dashboard toolbar) ----------
-  function injectCompanyButton() {
-    const toolbar = document.querySelector("#dashboard .toolbar");
-    if (!toolbar) return;
-    if (toolbar.querySelector("[data-company-btn='1']")) return;
-
-    const btn = document.createElement("button");
-    btn.className = "btn";
-    btn.textContent = "Company";
-    btn.setAttribute("data-company-btn", "1");
-    btn.onclick = () => {
-      const phone = prompt("Business phone:", settings.businessPhone || "");
-      if (phone === null) return;
-      const email = prompt("Business email:", settings.businessEmail || "");
-      if (email === null) return;
-      const abn = prompt("Business ABN:", settings.businessABN || "");
-      if (abn === null) return;
-      settings.businessPhone = String(phone).trim();
-      settings.businessEmail = String(email).trim();
-      settings.businessABN = String(abn).trim();
-      saveState();
-      toast("Company saved");
-    };
-
-    toolbar.appendChild(btn);
-  }
-
-  // ---------- navigation ----------
-  function showDashboard() {
-    setActiveNav("dash");
-    showOnly("dashboard");
-    loadHistory();
-    injectCompanyButton();
-  }
-
-  function showNewInvoice() {
-    setActiveNav("new");
-    showOnly("newInvoice");
-    ensureInvoiceDefaults();
-    loadSavedClientSelect();
-
-    // ensure at least 1 row exists
-    const tbody = $("itemsTable").querySelector("tbody");
-    if (tbody.children.length === 0) addRow({ desc: "General Clean", price: 0, qty: 1 });
 
     calculate();
   }
 
-  function showClients() {
-    setActiveNav("clients");
-    showOnly("clients");
-    loadClientsUI();
+  function clearItems() {
+    const tbody = $("itemsTable")?.querySelector("tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    addRow();
   }
 
-  // ---------- expose functions to HTML onclick ----------
-  window.showDashboard = showDashboard;
-  window.showNewInvoice = showNewInvoice;
-  window.showClients = showClients;
+  function hydrateInvoiceForm(inv) {
+    $("invoiceNo").value = inv.ref || inv.invoiceNo || nextInvoiceRef();
+    $("invoiceDate").value = inv.invoiceDate || nowISODate();
+    $("dueDate").value = inv.dueDate || addDaysISO(nowISODate(), 7);
 
-  window.loadHistory = loadHistory;
-  window.clearAllInvoices = clearAllInvoices;
+    $("clientName").value = inv.client?.name || "";
+    $("clientAddress").value = inv.client?.address || "";
+    $("clientPhone").value = inv.client?.phone || "";
+    $("clientEmail").value = inv.client?.email || "";
+    $("clientAbn").value = inv.client?.abn || "";
+    $("gstToggle").checked = !!inv.gst;
 
-  window.applySelectedClient = applySelectedClient;
-  window.saveClientFromInvoice = saveClientFromInvoice;
-  window.clearClientFields = clearClientFields;
+    const tbody = $("itemsTable")?.querySelector("tbody");
+    if (!tbody) return;
 
-  window.addRow = addRow;
-  window.calculate = calculate;
-  window.saveInvoice = saveInvoice;
-  window.previewInvoice = previewInvoice;
+    tbody.innerHTML = "";
+    (inv.items || []).forEach((it) => addRow(it));
+    if ((inv.items || []).length === 0) addRow();
 
-  window.loadClientsUI = loadClientsUI;
-  window.clearClientForm = clearClientForm;
-  window.saveClient = saveClient;
-  window.useClientFormForInvoice = useClientFormForInvoice;
-  window.deleteClientFromForm = deleteClientFromForm;
+    calculate();
+  }
 
-  window.exportPDF = exportPDF;
+  function addRow(prefill = null) {
+    const tbody = $("itemsTable")?.querySelector("tbody");
+    if (!tbody) return;
 
-  // ---------- init ----------
-  document.addEventListener("DOMContentLoaded", () => {
-    loadState();
-    saveState(); // normalize settings storage
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input class="it-desc" placeholder="e.g. End of lease clean" value="${escapeHtml(prefill?.desc || "")}"></td>
+      <td><input class="it-price" inputmode="decimal" placeholder="0.00" value="${prefill?.price ?? ""}"></td>
+      <td><input class="it-qty" inputmode="decimal" placeholder="1" value="${prefill?.qty ?? "1"}"></td>
+      <td class="amount it-amount">$0.00</td>
+      <td><button class="btn danger" type="button">✕</button></td>
+    `;
+    tr.querySelector(".btn.danger").onclick = () => {
+      tr.remove();
+      calculate();
+    };
 
-    // defaults
-    $("invoiceDate").value = todayDDMMYYYY();
-    $("dueDate").value = addDaysDDMMYYYY(7);
-    $("gstToggle").checked = true;
-    $("invoiceNo").value = String(getInvoiceCounter());
+    // live calc
+    ["input", "change"].forEach((evt) => {
+      tr.querySelector(".it-desc").addEventListener(evt, saveDraftDebounced);
+      tr.querySelector(".it-price").addEventListener(evt, () => { calculate(); saveDraftDebounced(); });
+      tr.querySelector(".it-qty").addEventListener(evt, () => { calculate(); saveDraftDebounced(); });
+    });
 
-    showDashboard();
-  });
+    tbody.appendChild(tr);
+    calculate();
+  }
+
+  function readItems() {
+    const rows = Array.from($("itemsTable")?.querySelectorAll("tbody tr") || []);
+    const items = rows.map((tr) => {
+      const desc = tr.querySelector(".it-desc")?.value?.trim() || "";
+      const price = Number(String(tr.querySelector(".it-price")?.value || "").replace(/[^0-9.\-]/g, "")) || 0;
+      const qty = Number(String(tr.querySelector(".it-qty")?.value || "").replace(/[^0-9.\-]/g, "")) || 0;
+      return { desc, price, qty };
+    }).filter((it) => it.desc || it.price || it.qty);
+    return items;
+  }
+
+  function calculate() {
+    const items = readItems();
+    const gstOn = !!$("gstToggle")?.checked;
+
+    let sub = 0;
+    const rows = Array.from($("itemsTable")?.querySelectorAll("tbody tr") || []);
+    rows.forEach((tr, idx) => {
+      const price = Number(String(tr.querySelector(".it-price")?.value || "").replace(/[^0-9.\-]/g, "")) || 0;
+      const qty = Number(String(tr.querySelector(".it-qty")?.value || "").replace(/[^0-9.\-]/g, "")) || 0;
+      const amt = price * qty;
+      if (tr.querySelector(".it-amount")) tr.querySelector(".it-amount").textContent = money(amt);
+      sub += amt;
+    });
+
+    const gst = gstOn ? sub * 0.10 : 0;
+    const total = sub + gst;
+
+    const summary = $("summary");
+    if (summary) {
+      summary.innerHTML = `
+        <div><span class="muted">Subtotal</span> — ${money(sub)}</div>
+        <div><span class="muted">GST</span> — ${money(gst)}</div>
+        <div style="margin-top:6px;font-size:16px;"><span class="muted">Total</span> — ${money(total)}</div>
+      `;
+    }
+
+    saveDraftDebounced();
+  }
+
+  const saveDraftDebounced = (() => {
+    let t = null;
+    return () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        try {
+          const inv = collectInvoiceFromForm(false);
+          saveLS(LS_KEYS.lastDraft, inv);
+        } catch {}
+      }, 250);
+    };
+  })();
+
+  function collectInvoiceFromForm(requireClient = true) {
+    const ref = $("invoiceNo")?.value?.trim() || nextInvoiceRef();
+    const invoiceDate = $("invoiceDate")?.value || nowISODate();
+    const dueDate = $("dueDate")?.value || addDaysISO(invoiceDate, 7);
+
+    const client = {
+      name: $("clientName")?.value?.trim() || "",
+      address: $("clientAddress")?.value?.trim() || "",
+      phone: $("clientPhone")?.value?.trim() || "",
+      email: $("clientEmail")?.value?.trim() || "",
+      abn: $("clientAbn")?.value?.trim() || "",
+    };
+
+    if (requireClient && !client.name) throw new Error("Client name required");
+
+    const items = readItems();
+    if (requireClient && items.length === 0) throw new Error("Add at least 1 line item");
+
+    const gst = !!$("gstToggle")?.checked;
+    const sub = items.reduce((a, it) => a + (Number(it.price) || 0) * (Number(it.qty) || 0), 0);
+    const gstAmt = gst ? sub * 0.10 : 0;
+    const total = sub + gstAmt;
+
+    return {
+      id: crypto.randomUUID?.() || String(Date.now()),
+      ref,
+      invoiceDate,
+      dueDate,
+      client,
+      items,
+      gst,
+      totals: { sub, gst: gstAmt, total },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+  }
+
+  function saveInvoice() {
+    let inv;
+    try {
+      inv = collectInvoiceFromForm(true);
+    } catch (e) {
+      return toast("Can't save", e.message || "Missing fields");
+    }
+
+    // Upsert by ref (so user can re-save same invoice number if they want)
+    const idx = invoices.findIndex((x) => x.ref === inv.ref);
+    if (idx >= 0) {
+      inv.id = invoices[idx].id;
+      inv.createdAt = invoices[idx].createdAt;
+      invoices[idx] = inv;
+    } else {
+      invoices.unshift(inv);
+    }
+
+    saveLS(LS_KEYS.invoices, invoices);
+    toast("Invoice saved", inv.ref);
+    loadHistory();
+  }
+
+  function clearAllInvoices() {
+    if (!confirm("Delete all invoices stored on this device?")) return;
+    invoices = [];
+    saveLS(LS_KEYS.invoices, invoices);
+    toast("Invoices cleared");
+    loadHistory();
+  }
+
+  // --- History ---
+  function loadHistory() {
+    const list = $("historyList");
+    if (!list) return;
+
+    invoices = loadLS(LS_KEYS.invoices, []);
+    const q = ($("searchBox")?.value || "").trim().toLowerCase();
+
+    const filtered = invoices.filter((inv) => {
+      const hay = `${inv.ref || ""} ${inv.client?.name || ""} ${inv.client?.phone || ""} ${inv.client?.address || ""}`.toLowerCase();
+      return !q || hay.includes(q);
+    });
+
+    list.innerHTML = "";
+    if (filtered.length === 0) {
+      list.innerHTML = `<div class="muted" style="padding:10px;">No invoices yet.</div>`;
+      return;
+    }
+
+    filtered.forEach((inv) => {
+      const card = document.createElement("div");
+      card.className = "card";
+      const total = inv.totals?.total ?? 0;
+
+      card.innerHTML = `
+        <div class="card-left">
+          <div class="title">${escapeHtml(inv.ref || "Invoice")}${inv.client?.name ? ` — ${escapeHtml(inv.client.name)}` : ""}</div>
+          <div class="meta">${escapeHtml(inv.client?.address || "")}</div>
+          <div class="meta">${escapeHtml(inv.invoiceDate || "")}${inv.client?.phone ? " • " + escapeHtml(inv.client.phone) : ""}</div>
+        </div>
+        <div class="card-right">
+          <div class="pill">${money(total)}</div>
+          <button class="btn" data-act="view">View</button>
+          <button class="btn danger" data-act="del">Delete</button>
+        </div>
+      `;
+
+      card.querySelector('[data-act="view"]').onclick = () => {
+        hydrateInvoiceForm(inv);
+        previewInvoice();
+      };
+      card.querySelector('[data-act="del"]').onclick = () => {
+        if (!confirm(`Delete ${inv.ref}?`)) return;
+        invoices = invoices.filter((x) => x.id !== inv.id);
+        saveLS(LS_KEYS.invoices, invoices);
+        loadHistory();
+        toast("Deleted", inv.ref);
+      };
+
+      list.appendChild(card);
+    });
+  }
+
+  // --- Preview + PDF ---
+  function previewInvoice() {
+    let inv;
+    try {
+      inv = collectInvoiceFromForm(true);
+    } catch (e) {
+      return toast("Can't preview", e.message || "Missing fields");
+    }
+
+    const section = $("previewSection");
+    if (!section) return;
+
+    // Build preview HTML
+    const rows = inv.items.map((it) => {
+      const amt = (Number(it.price) || 0) * (Number(it.qty) || 0);
+      return `
+        <tr>
+          <td>${escapeHtml(it.desc)}</td>
+          <td style="text-align:right;">${money(it.price)}</td>
+          <td style="text-align:right;">${escapeHtml(it.qty)}</td>
+          <td style="text-align:right;">${money(amt)}</td>
+        </tr>
+      `;
+    }).join("");
+
+    const gstRow = inv.gst ? `
+      <tr>
+        <td colspan="3" style="text-align:right;font-weight:800;">GST (10%)</td>
+        <td style="text-align:right;font-weight:900;">${money(inv.totals.gst)}</td>
+      </tr>` : "";
+
+    section.innerHTML = `
+      <div class="invoice-wrap">
+        <div style="display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;align-items:flex-start;">
+          <div style="display:flex;gap:12px;align-items:center;">
+            <img src="./assets/logo.png" alt="Starshine" style="width:44px;height:44px;border-radius:12px;border:1px solid #e6e6e6;object-fit:cover;" />
+            <div>
+              <div style="font-weight:950;font-size:18px;line-height:1.1;">Starshine Clean</div>
+              <div style="font-size:12px;color:#4b5563;margin-top:2px;">Starshine Invoice Pro</div>
+            </div>
+          </div>
+          <div style="text-align:right;min-width:200px;">
+            <div style="font-weight:980;font-size:22px;">INVOICE</div>
+            <div style="font-size:12px;color:#4b5563;margin-top:4px;">
+              <div><b>${escapeHtml(inv.ref)}</b></div>
+              <div>Date: ${escapeHtml(inv.invoiceDate)}</div>
+              <div>Due: ${escapeHtml(inv.dueDate)}</div>
+            </div>
+          </div>
+        </div>
+
+        <hr style="border:0;border-top:1px solid #eee;margin:18px 0;" />
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <div style="font-weight:950;margin-bottom:6px;">Bill To</div>
+            <div style="font-size:13px;line-height:1.45;">
+              <div style="font-weight:900;">${escapeHtml(inv.client.name)}</div>
+              <div>${escapeHtml(inv.client.address)}</div>
+              <div>${escapeHtml(inv.client.phone)}</div>
+              ${inv.client.email ? `<div>${escapeHtml(inv.client.email)}</div>` : ""}
+              ${inv.client.abn ? `<div>ABN: ${escapeHtml(inv.client.abn)}</div>` : ""}
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-weight:950;margin-bottom:6px;">Pay To</div>
+            <div style="font-size:13px;line-height:1.45;">
+              <div><b>Account name:</b> Starshine Clean</div>
+              <div><b>BSB:</b> 014111</div>
+              <div><b>Account:</b> 123456789</div>
+              <div style="color:#4b5563;margin-top:6px;">(Edit these in your file later.)</div>
+            </div>
+          </div>
+        </div>
+
+        <table style="width:100%;border-collapse:collapse;margin-top:18px;">
+          <thead>
+            <tr>
+              <th style="text-align:left;border-bottom:1px solid #eee;padding:10px 6px;">Description</th>
+              <th style="text-align:right;border-bottom:1px solid #eee;padding:10px 6px;">Price</th>
+              <th style="text-align:right;border-bottom:1px solid #eee;padding:10px 6px;">Qty</th>
+              <th style="text-align:right;border-bottom:1px solid #eee;padding:10px 6px;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+            <tr>
+              <td colspan="3" style="text-align:right;font-weight:800;padding:10px 6px;border-top:1px solid #eee;">Subtotal</td>
+              <td style="text-align:right;font-weight:900;padding:10px 6px;border-top:1px solid #eee;">${money(inv.totals.sub)}</td>
+            </tr>
+            ${gstRow}
+            <tr>
+              <td colspan="3" style="text-align:right;font-weight:950;padding:10px 6px;border-top:2px solid #111;">Total</td>
+              <td style="text-align:right;font-weight:950;padding:10px 6px;border-top:2px solid #111;">${money(inv.totals.total)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="margin-top:18px;font-size:12px;color:#4b5563;">
+          Thank you for your business.
+        </div>
+      </div>
+
+      <div class="preview-actions" style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px;">
+        <button class="btn" type="button" onclick="backFromPreview()">Back</button>
+        <button class="btn primary" type="button" onclick="exportPdf()">Download PDF</button>
+      </div>
+    `;
+
+    showOnly("previewSection");
+    // keep nav highlight on New Invoice
+    setActiveNav("navNew");
+    toast("Preview ready", "Tap Download PDF");
+  }
+
+  function backFromPreview() {
+    showNewInvoice();
+  }
+
+  async function exportPdf() {
+    const wrap = document.querySelector("#previewSection .invoice-wrap");
+    if (!wrap) return toast("Open preview first");
+
+    // Prefer real PDF generation (works on iPhone)
+    const hasCanvas = typeof window.html2canvas === "function";
+    const hasJsPDF = !!(window.jspdf && window.jspdf.jsPDF);
+
+    if (!hasCanvas || !hasJsPDF) {
+      // Last resort: print dialog (may fail in iOS standalone)
+      toast("Loading PDF tools…", "If offline first-run, reconnect once.");
+      try { window.print(); } catch {}
+      return;
+    }
+
+    toast("Building PDF…");
+
+    const canvas = await window.html2canvas(wrap, {
+      scale: Math.min(2, window.devicePixelRatio || 2),
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      windowWidth: wrap.scrollWidth,
+      scrollX: 0,
+      scrollY: -window.scrollY,
+    });
+
+    const imgData = canvas.toDataURL("image/jpeg", 0.92);
+    const { jsPDF } = window.jspdf;
+
+    const pdf = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+
+    // Convert px to mm based on canvas dimensions
+    const imgProps = pdf.getImageProperties(imgData);
+    const imgW = pageW;
+    const imgH = (imgProps.height * imgW) / imgProps.width;
+
+    pdf.addImage(imgData, "JPEG", 0, 0, imgW, imgH);
+
+    if (imgH > pageH) {
+      const pages = Math.ceil(imgH / pageH);
+      for (let i = 1; i < pages; i++) {
+        pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, -i * pageH, imgW, imgH);
+      }
+    }
+
+    const ref = ($("invoiceNo")?.value || "invoice").replace(/[^\w\-]+/g, "_");
+    const filename = `${ref}.pdf`;
+    const blob = pdf.output("blob");
+
+    // Share on iOS (best UX)
+    try {
+      const file = new File([blob], filename, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+        toast("Shared", filename);
+        return;
+      }
+    } catch {}
+
+    // Fallback: open + download
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    // iOS often ignores download attribute — opening the blob works.
+    setTimeout(() => window.open(url, "_blank"), 150);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+    toast("PDF ready", filename);
+  }
 })();

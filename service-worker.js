@@ -1,70 +1,76 @@
-/* Starshine Invoice Pro — PWA Service Worker
-   - Works on HTTPS (or http://localhost)
-   - Won't run from file:// (that's normal)
-*/
-const CACHE = "starshine-invoice-pro-pwa-v1";
-const ASSETS = [
+/* Starshine PWA Service Worker (cache-first + offline) */
+const CACHE_NAME = "starshine-pwa-v2";
+const PRECACHE_URLS = [
   "./",
   "./index.html",
   "./renderer.js",
   "./manifest.webmanifest",
-  "./assets/pwa-180.png",
-  "./assets/pwa-192.png",
-  "./assets/pwa-512.png",
-  "./assets/pwa-maskable-512.png",
   "./assets/logo.png",
-  "./assets/icon.png",
-  "./assets/icon-clean.png",
-  "./assets/icon.ico"
+  "./assets/icon-192.png",
+  "./assets/icon-512.png",
+  "./assets/apple-touch-icon.png",
+  "./assets/favicon.png"
 ];
 
+// Install: pre-cache core assets
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    (async () => {
-      try {
-        const cache = await caches.open(CACHE);
-        await cache.addAll(ASSETS);
-      } catch (e) {
-        // If some optional assets don't exist, don't fail install.
-      }
-      self.skipWaiting();
-    })()
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)).then(() => self.skipWaiting())
   );
 });
 
+// Activate: clean old caches
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    (async () => {
-      const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
-      await self.clients.claim();
-    })()
+    caches.keys().then((keys) =>
+      Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : Promise.resolve())))
+    ).then(() => self.clients.claim())
   );
 });
 
+function isCDN(url) {
+  return (
+    url.hostname.includes("jsdelivr.net") ||
+    url.hostname.includes("cdnjs.cloudflare.com") ||
+    url.hostname.includes("unpkg.com")
+  );
+}
+
+// Fetch: cache-first for same-origin + CDN runtime cache
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
+  const req = event.request;
+  if (req.method !== "GET") return;
 
+  const url = new URL(req.url);
+
+  // SPA-ish: serve index.html for navigation
+  if (req.mode === "navigate") {
+    event.respondWith(
+      caches.match("./index.html").then((cached) => cached || fetch(req))
+    );
+    return;
+  }
+
+  // Cache-first strategy
   event.respondWith(
-    (async () => {
-      const cache = await caches.open(CACHE);
-
-      // Prefer cached first (fast + offline). Ignore querystring so updates still hit same cache key.
-      const cached = await cache.match(event.request, { ignoreSearch: true });
+    caches.match(req).then((cached) => {
       if (cached) return cached;
 
-      try {
-        const resp = await fetch(event.request);
-        // Cache successful same-origin responses
-        if (resp && resp.status === 200) {
-          cache.put(event.request, resp.clone());
-        }
-        return resp;
-      } catch (e) {
-        // Offline fallback: app shell
-        const shell = await cache.match("./index.html");
-        return shell || new Response("Offline", { status: 503 });
-      }
-    })()
+      return fetch(req)
+        .then((res) => {
+          // Cache successful responses
+          const okToCache = res && res.status === 200 && (url.origin === location.origin || isCDN(url));
+          if (okToCache) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => {
+          // If offline, try fallback for same-origin
+          if (url.origin === location.origin) return caches.match("./index.html");
+          return new Response("", { status: 504, statusText: "Offline" });
+        });
+    })
   );
 });

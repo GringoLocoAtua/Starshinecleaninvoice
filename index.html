@@ -1,30 +1,29 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
 <meta name="theme-color" content="#19b7e6" />
+<meta name="color-scheme" content="light" />
 <meta name="description" content="Starshine Invoice Pro — fast invoices + saved clients." />
+
 <link rel="manifest" href="./manifest.webmanifest" />
-<link rel="icon" href="./assets/pwa-192.png" />
-<link rel="apple-touch-icon" href="./assets/pwa-180.png" />
+<link rel="icon" href="./assets/favicon.png" />
+<link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Starshine Invoice Pro" />
-<meta name="mobile-web-app-capable" content="yes" />
+
 <title>Starshine Invoice Pro</title>
 
 <style>
   /* =========================
-     STARSHINE // APPLE NEXT-LEVEL (UI ONLY)
-     - iOS / macOS “software update” glass
-     - Logo colours (cyan/teal + gold)
-     - Smooth transitions + active segmented nav
-     - Adds: CLIENTS TAB + saved-client picker
+     STARSHINE // APPLE NEXT-LEVEL (PWA + MOBILE FIX)
+     - Proper viewport + no iOS auto-zoom (inputs >= 16px)
+     - Stable height via --vh (iOS address bar)
+     - Same glass UI + Clients tab
      ========================= */
 
   :root{
-    /* Logo-inspired palette */
     --cyan:#19b7e6;
     --cyan2:#0ea5e9;
     --teal:#14b8a6;
@@ -33,7 +32,6 @@
     --muted:#5b667a;
     --gold:#d8c87a;
 
-    /* Apple glass surfaces */
     --bg1:#f6f8fc;
     --bg2:#eef3fb;
     --glass: rgba(255,255,255,.78);
@@ -43,14 +41,12 @@
     --shadow: 0 18px 55px rgba(11,18,32,.12);
     --shadow2: 0 10px 28px rgba(11,18,32,.10);
 
-    /* Controls */
     --control: rgba(255,255,255,.86);
     --controlBorder: rgba(11,18,32,.14);
     --controlFocus: rgba(25,183,230,.28);
 
     --danger: #ef4444;
 
-    /* Radii */
     --r-xl: 26px;
     --r-lg: 18px;
     --r-md: 14px;
@@ -70,9 +66,11 @@
       radial-gradient(900px 640px at 60% 92%, rgba(14,165,233,.18) 0%, rgba(14,165,233,0) 64%),
       linear-gradient(180deg, var(--bg1) 0%, var(--bg2) 100%);
     overflow-x: hidden;
+    min-height: calc(var(--vh, 1vh) * 100);
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
   }
 
-  /* Subtle “update screen” sheen */
   body::before{
     content:"";
     position: fixed;
@@ -86,12 +84,11 @@
     opacity: .55;
   }
 
-  /* Top bar */
   nav{
     position: sticky;
     top:0;
     z-index: 10;
-    padding: 14px 16px;
+    padding: calc(10px + env(safe-area-inset-top)) 16px 12px 16px;
     display:flex;
     align-items:center;
     justify-content:space-between;
@@ -128,7 +125,6 @@
     box-shadow: 0 0 18px rgba(216,200,122,.55);
   }
 
-  /* Segmented nav group */
   .seg{
     display:flex;
     gap:8px;
@@ -137,6 +133,8 @@
     background: rgba(255,255,255,.60);
     border: 1px solid rgba(11,18,32,.10);
     box-shadow: 0 10px 26px rgba(11,18,32,.06);
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .navbtn{
@@ -149,10 +147,7 @@
     font-weight: 900;
     transition: transform .12s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease;
   }
-  .navbtn:hover{
-    background: rgba(255,255,255,.70);
-    transform: translateY(-1px);
-  }
+  .navbtn:hover{ background: rgba(255,255,255,.70); transform: translateY(-1px); }
   .navbtn:active{ transform: translateY(0px) scale(.99); }
   .navbtn.active{
     background:
@@ -163,9 +158,8 @@
     box-shadow: 0 14px 30px rgba(11,18,32,.10);
   }
 
-  /* Layout */
   .container{
-    padding: 18px 18px 40px 18px;
+    padding: 18px 18px calc(40px + env(safe-area-inset-bottom)) 18px;
     display:flex;
     justify-content:center;
   }
@@ -178,7 +172,6 @@
     z-index: 1;
   }
 
-  /* Glass panels */
   .panel{
     background: linear-gradient(180deg, var(--glass) 0%, var(--glass2) 100%);
     border: 1px solid var(--border);
@@ -201,9 +194,7 @@
   }
   .panel > * { position: relative; z-index: 1; }
 
-  .fade{
-    animation: fadeUp .22s ease-out both;
-  }
+  .fade{ animation: fadeUp .22s ease-out both; }
   @keyframes fadeUp{
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0px); }
@@ -212,7 +203,6 @@
   h1,h2,h3{ margin:0; }
   .muted{ color: var(--muted); }
 
-  /* Inputs */
   label{
     display:block;
     font-size: 12px;
@@ -220,6 +210,7 @@
     margin-bottom: 6px;
     font-weight: 750;
   }
+
   input, select{
     width: 100%;
     background: var(--control);
@@ -232,7 +223,9 @@
     transition: box-shadow .12s ease, border-color .12s ease;
     -webkit-appearance: none;
     appearance: none;
+    font-size: 16px; /* iOS: prevents auto-zoom */
   }
+
   select{
     background-image:
       linear-gradient(45deg, transparent 50%, rgba(11,18,32,.55) 50%),
@@ -252,7 +245,6 @@
   }
   input[readonly]{ opacity:.92; }
 
-  /* Buttons */
   .btn{
     border: 1px solid rgba(11,18,32,.12);
     background: rgba(255,255,255,.86);
@@ -263,6 +255,7 @@
     font-weight: 950;
     box-shadow: var(--shadow2);
     transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+    font-size: 16px;
   }
   .btn:hover{
     transform: translateY(-1px);
@@ -284,11 +277,8 @@
     border-color: rgba(239,68,68,.28);
   }
 
-  .btn.ghost{
-    background: rgba(255,255,255,.70);
-  }
+  .btn.ghost{ background: rgba(255,255,255,.70); }
 
-  /* Grid */
   .grid{
     display:grid;
     grid-template-columns: repeat(12, 1fr);
@@ -298,7 +288,6 @@
   .field.sm{ grid-column: span 4; }
   .field.full{ grid-column: span 12; }
 
-  /* Sections */
   .header-row{
     display:flex;
     justify-content:space-between;
@@ -319,8 +308,8 @@
     align-items:center;
     flex-wrap:wrap;
   }
+  .toolbar input{ min-width: 240px; }
 
-  /* History list */
   .history{
     display:flex;
     flex-direction:column;
@@ -345,14 +334,8 @@
     gap:4px;
     min-width: 280px;
   }
-  .title{
-    font-weight: 980;
-    font-size: 15px;
-  }
-  .meta{
-    font-size: 12px;
-    color: var(--muted);
-  }
+  .title{ font-weight: 980; font-size: 15px; }
+  .meta{ font-size: 12px; color: var(--muted); }
   .card-right{
     display:flex;
     align-items:center;
@@ -370,7 +353,6 @@
     box-shadow: 0 10px 22px rgba(11,18,32,.08);
   }
 
-  /* Toggle */
   .toggle{
     display:flex;
     align-items:center;
@@ -379,7 +361,6 @@
   }
   .toggle input{ width:18px; height:18px; }
 
-  /* Table */
   table{
     width:100%;
     border-collapse: collapse;
@@ -414,12 +395,9 @@
     border: 1px solid rgba(11,18,32,.12);
     background: rgba(255,255,255,.86);
     box-shadow: 0 10px 22px rgba(11,18,32,.06);
+    font-size: 16px;
   }
-  .amount{
-    text-align:right;
-    font-weight: 980;
-    color: var(--navy);
-  }
+  .amount{ text-align:right; font-weight: 980; color: var(--navy); }
 
   .actions{
     display:flex;
@@ -437,7 +415,6 @@
 
   .hidden{ display:none; }
 
-  /* Preview wrapper stays white for PDF fidelity */
   #previewSection{
     width: min(980px, 100%);
     margin: 0 auto;
@@ -449,18 +426,19 @@
     padding: 34px;
     border: 1px solid #e8e8e8;
     box-shadow: 0 18px 50px rgba(11,18,32,.12);
+    overflow: hidden;
   }
   .preview-actions{
     display:flex;
     justify-content:flex-end;
     gap:10px;
     margin-top: 12px;
+    flex-wrap: wrap;
   }
 
-  /* Toast */
   .toast{
     position: fixed;
-    top: 74px;
+    top: calc(74px + env(safe-area-inset-top));
     right: 18px;
     z-index: 999;
     min-width: 240px;
@@ -479,10 +457,7 @@
     font-weight: 900;
     color: var(--ink);
   }
-  .toast.show{
-    opacity: 1;
-    transform: translateY(0px);
-  }
+  .toast.show{ opacity: 1; transform: translateY(0px); }
   .toast small{
     display:block;
     margin-top: 4px;
@@ -507,6 +482,11 @@
   @media (max-width: 900px){
     .field{ grid-column: span 12; }
     .field.sm{ grid-column: span 12; }
+    .toolbar input{ min-width: 180px; }
+    .invoice-wrap{ padding: 18px; }
+    nav{ flex-wrap: wrap; }
+    .brand{ width: 100%; justify-content: center; }
+    .seg{ width: 100%; justify-content: center; }
   }
 </style>
 </head>
@@ -514,7 +494,7 @@
 <body>
 <nav>
   <div class="brand">
-    <img class="brand-logo" src="assets/logo.png" alt="Starshine" onerror="this.style.display='none'">
+    <img class="brand-logo" src="./assets/logo.png" alt="Starshine">
     <span class="brand-dot"></span>
     Starshine Invoice Pro
   </div>
@@ -534,7 +514,7 @@
       <div class="header-row">
         <div>
           <h2>Invoice History</h2>
-          <div class="muted" style="margin-top:6px;">Saved locally on this PC.</div>
+          <div class="muted" style="margin-top:6px;">Saved locally on this device.</div>
         </div>
         <div class="toolbar">
           <input id="searchBox" placeholder="Search by name, phone, address, invoice #..." oninput="loadHistory()">
@@ -549,7 +529,7 @@
       <div class="header-row">
         <div>
           <h2>Create Invoice</h2>
-          <div class="muted" style="margin-top:6px;">2 clicks: select client → add line item → save/preview.</div>
+          <div class="muted" style="margin-top:6px;">Select client → add line item → save/preview.</div>
         </div>
         <div class="toolbar">
           <select id="savedClientSelect" onchange="applySelectedClient()">
@@ -566,11 +546,11 @@
         </div>
         <div class="field sm">
           <label>Invoice Date</label>
-          <input id="invoiceDate">
+          <input id="invoiceDate" type="date">
         </div>
         <div class="field sm">
           <label>Due Date</label>
-          <input id="dueDate">
+          <input id="dueDate" type="date">
         </div>
 
         <div class="field">
@@ -584,11 +564,11 @@
 
         <div class="field sm">
           <label>Client Phone</label>
-          <input id="clientPhone" placeholder="e.g. 0401 027 367">
+          <input id="clientPhone" placeholder="e.g. 0401 027 367" inputmode="tel">
         </div>
         <div class="field sm">
           <label>Client Email (optional)</label>
-          <input id="clientEmail" placeholder="e.g. client@email.com">
+          <input id="clientEmail" placeholder="e.g. client@email.com" inputmode="email">
         </div>
         <div class="field sm">
           <label>Client ABN (optional)</label>
@@ -642,7 +622,7 @@
       <div class="header-row">
         <div>
           <h2>Clients</h2>
-          <div class="muted" style="margin-top:6px;">Save profiles once → invoices become fast as hell.</div>
+          <div class="muted" style="margin-top:6px;">Save profiles once → invoices become fast.</div>
         </div>
         <div class="toolbar">
           <input id="clientsSearchBox" placeholder="Search clients by name, phone, address..." oninput="loadClientsUI()">
@@ -667,11 +647,11 @@
             </div>
             <div class="field sm" style="grid-column: span 12;">
               <label>Phone</label>
-              <input id="c_phone" placeholder="e.g. 0401 027 367">
+              <input id="c_phone" placeholder="e.g. 0401 027 367" inputmode="tel">
             </div>
             <div class="field sm" style="grid-column: span 12;">
               <label>Email (optional)</label>
-              <input id="c_email" placeholder="e.g. client@email.com">
+              <input id="c_email" placeholder="e.g. client@email.com" inputmode="email">
             </div>
             <div class="field sm" style="grid-column: span 12;">
               <label>ABN (optional)</label>
@@ -705,16 +685,9 @@
 
 <div id="toast" class="toast"></div>
 
-
-<script>
-  // PWA: Service Worker registration (works on https:// or http://localhost, NOT file://)
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js").catch(() => {});
-    });
-  }
-</script>
-
-<script src="renderer.js"></script>
+<!-- PDF libs (cached by service worker after first load) -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="./renderer.js"></script>
 </body>
 </html>
